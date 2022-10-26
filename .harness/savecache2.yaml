@@ -1,0 +1,130 @@
+pipeline:
+  name: savecache2
+  identifier: savecache2
+  projectIdentifier: NgLabs
+  orgIdentifier: default
+  tags: {}
+  stages:
+    - stage:
+        identifier: BuildAndTest_RocketMQ
+        type: CI
+        name: BuildAndTest_RocketMQ
+        spec:
+          cloneCodebase: true
+          infrastructure:
+            type: VM
+            spec:
+              type: Pool
+              spec:
+                poolName: aws-linux-amd64-harsh
+                os: Linux
+          execution:
+            steps:
+              - step:
+                  identifier: restorecache
+                  type: RestoreCacheGCS
+                  name: restorecache
+                  spec:
+                    connectorRef: gkecluster2
+                    bucket: harness-gcs
+                    key: graddle
+                    archiveFormat: Tar
+                  failureStrategies:
+                    - onFailure:
+                        errors:
+                          - AllErrors
+                        action:
+                          type: MarkAsSuccess
+              - step:
+                  identifier: RunStep
+                  type: Run
+                  name: RunStep
+                  spec:
+                    shell: Sh
+                    command: |-
+                      ls
+                      env
+                      pwd
+                      # ./gradlew jar
+                      ./gradlew   unitTest -PignoreFailures=true -PmaxParallelForks=32  --rerun-tasks --continue
+                    reports:
+                      type: JUnit
+                      spec:
+                        paths:
+                          - "**/*.xml"
+                  failureStrategies:
+                    - onFailure:
+                        errors:
+                          - AllErrors
+                        action:
+                          type: MarkAsSuccess
+              - step:
+                  identifier: ti
+                  type: RunTests
+                  name: ti
+                  spec:
+                    language: Java
+                    buildTool: Gradle
+                    args: unitTest -PignoreFailures=true -PmaxParallelForks=32  --rerun-tasks --continue
+                    runOnlySelectedTests: true
+                    preCommand: |-
+                      # env
+                      # `which java` -XX:+PrintFlagsFinal -version | grep -iE 'HeapSize|PermSize|ThreadStackSize'
+                      # :stream:unitTest :core:unitTest :client:unitTest --rerun-tasks --continue -PignoreFailures=true
+
+                      `which java` -XX:+PrintFlagsFinal -version | grep -iE 'HeapSize|PermSize|ThreadStackSize'
+                    postCommand: "# ls"
+                    reports:
+                      type: JUnit
+                      spec:
+                        paths:
+                          - "**/*.xml"
+                  failureStrategies: []
+                  when:
+                    stageStatus: Failure
+                    condition: "false"
+              - step:
+                  identifier: RunStep111
+                  type: Run
+                  name: RunStep111
+                  spec:
+                    shell: Sh
+                    command: |
+                      ls 
+                      pwd
+                    reports:
+                      type: JUnit
+                      spec:
+                        paths:
+                          - "**/*.xml"
+                  failureStrategies: []
+                  when:
+                    stageStatus: Failure
+                    condition: "true"
+              - step:
+                  identifier: savecache
+                  type: SaveCacheGCS
+                  name: savecache
+                  spec:
+                    connectorRef: gkecluster2
+                    bucket: harness-gcs
+                    key: graddle
+                    sourcePaths:
+                      - /root/.gradle
+                    archiveFormat: Tar
+                  failureStrategies:
+                    - onFailure:
+                        errors:
+                          - AllErrors
+                        action:
+                          type: MarkAsSuccess
+          sharedPaths:
+            - /root/.gradle
+  properties:
+    ci:
+      codebase:
+        connectorRef: ronakforgit2
+        build:
+          type: branch
+          spec:
+            branch: trunk

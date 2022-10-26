@@ -123,6 +123,7 @@ pipeline:
   properties:
     ci:
       codebase:
+        repoName: rocketmq
         connectorRef: ronakforgit2
         build:
           type: branch
